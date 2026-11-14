@@ -77,3 +77,10 @@ def find_matching(tokens, start, open_char="(", close_char=")"):
             if depth == 0:
                 return i
     raise SyntaxError(f"缺少 {close_char}: {tokens[start:]}")
+#取token的体
+def extract_body(tokens, open_char="{", close_char="}"):
+    
+    groups = extract_groups(tokens, open_char, close_char)
+    if not groups:
+        return None
+    return groups[-1][2]      # 最外层括号内

@@ -44,12 +44,27 @@ def split_statements(tokens):
                      and cur[-1] not in ("@", "&")
                      and re.fullmatch(r'[A-Za-z_]\w*', cur[-1]))
         prev_is_close_brace = i > 0 and tokens[i-1] == "}"
+        prev_is_colon = i > 0 and tokens[i-1] == ":"
+        prev_is_amp   = i > 0 and tokens[i-1] == "&"
+        prev_is_close_brace = i > 0 and tokens[i-1] == "}"
+        is_at_end = (t == "@" and len(cur) >= 2
+                    and cur[-1] not in ("@", "&")
+                    and re.fullmatch(r'[A-Za-z_]\w*', cur[-1]))
+        prev_is_colon = i > 0 and tokens[i-1] == ":"
+        prev_is_amp   = i > 0 and tokens[i-1] == "&"
+        prev_is_def   = i > 0 and tokens[i-1] == "def"
+        prev_is_close_brace = i > 0 and tokens[i-1] == "}"
+        is_at_end = (t == "@" and len(cur) >= 2
+                    and cur[-1] not in ("@", "&")
+                    and re.fullmatch(r'[A-Za-z_]\w*', cur[-1]))
+
         is_starter = depth == 0 and (
-            (t in STMT_STARTERS and cur and not prev_is_colon) or
-            (t in KEY_SYMBOL and cur and not is_at_end) or       # ← 排除 @x@ 结尾
+            (t in STMT_STARTERS and cur and not prev_is_colon
+            and not prev_is_amp and not prev_is_def) or
+            (t in KEY_SYMBOL and cur and not is_at_end) or
             (i + 1 < len(tokens) and tokens[i+1] == ":" and cur) or
             (i + 1 < len(tokens) and tokens[i+1] == "=" and cur and
-             re.fullmatch(r'[A-Za-z_]\w*', t)) or
+            re.fullmatch(r'[A-Za-z_]\w*', t)) or
             (prev_is_close_brace and re.fullmatch(r'[A-Za-z_]\w*', t) and cur)
         )
         if is_starter:

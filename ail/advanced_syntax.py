@@ -2,7 +2,7 @@ import re
 import sys
 from attributes import *
 from base_syntax import merge_dotted, split_statements,split_args
-from tools import get_value,find_matching,extract_groups,resolve_expr
+from tools import *
 from runtime import register, execute
 
 
@@ -249,24 +249,20 @@ def handle_assign(stmt):
 import attributes as pa
 
 def call_function(name, args):
+    global last_value
     fn = pa.FUNCTION_dictionary.get(name)
     if fn is None:
         raise NameError(f"未定义函数: {name}")
 
     decorator = fn.get("decorator")
 
-    if decorator and not args:
-        kind, src = decorator
-        val = pa.last_return.get(src)
-        if val is None:
-            raise NameError(f"{src} 还没调用过，@ 无法取返回值")
-        args = [val]
+    if not args and pa.last_value is not None:
+        args = [pa.last_value]
 
     params = fn["params"]
     body   = fn["body"]
-
     if len(params) != len(args):
-        raise TypeError(f"{name} 需要 {len(params)} 个参数")
+        raise TypeError(f"{name} 需要 {len(params)} 个参数，给了 {len(args)}")
 
     local = dict(zip(params, args))
     pa.CALL_STACK.append(local)
@@ -277,14 +273,16 @@ def call_function(name, args):
             r = execute(sub)
             if r is not None:
                 result = r
-                break              # ← 不直接 return，记 result
+                break
     finally:
         pa.CALL_STACK.pop()
 
-    pa.last_return[name] = result   # ← finally 之后记，一定执行
+    pa.last_value = result
 
     if decorator and decorator[0] == "@@":
         pa.last_return[decorator[1]] = result
+    pa.last_return[name] = result
+
     return result
 @register("def")
 def handle_def(stmt):
@@ -307,9 +305,15 @@ def handle_def(stmt):
     FUNCTION_dictionary[name] = {
         "params": params,
         "body": body,
-        "decorator": pending_decorator,
+        "decorator": pa.DECORATOR_STATE["pending"],
     }
-    pending_decorator = None  
+    pa.DECORATOR_STATE["pending"] = None
+
+    # &train_main 认领
+    if pa.TRAIN_STATE["pending_main"]:
+        pa.TRAIN_STATE["main"] = name
+        pa.TRAIN_STATE["pending_main"] = False
+
     return None
 @register("return")
 def handle_return(stmt):

@@ -42,23 +42,37 @@ def execute(stmt):
         return h(stmt)
 
     raise SyntaxError(f"未知语句: {stmt}")
-
 def src(text):
     tokens = tokenize(text)
     stmts = split_statements(tokens)
-    for stmt in stmts:
+    for i, stmt in enumerate(stmts):
+        if stmt[0] == "&":
+            kind = stmt[1] if len(stmt) > 1 else None
+            if kind == "layer":
+                if i + 1 >= len(stmts) or stmts[i+1][0] != "layer":
+                    raise SyntaxError(f"&layer 后必须是 layer 块: {stmt}")
+            elif kind == "train_main":
+                if i + 1 >= len(stmts) or stmts[i+1][0] != "def":
+                    raise SyntaxError(f"&train_main 后必须是 def: {stmt}")
+            elif kind == "train_finish":
+                if i + 1 >= len(stmts):
+                    raise SyntaxError(f"&train_finish 后必须是一条语句: {stmt}")
         execute(stmt)
 if __name__ == '__main__':
+    from nn_syntax import *
     from advanced_syntax import *   
     # 测试
     src('''
-def x(num) {
-    return num + 1
+&layer xx
+layer{
+50,60
+60,30
 }
-@x@
-def d(x) {
-    return x + 1
+
+&train_main
+def train() {
+    print("训练中")
 }
-x(1)
-print(d())
+
+print("完成")
     ''')
