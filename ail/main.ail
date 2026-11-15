@@ -1,0 +1,14 @@
+import "nn/train_mian.py" as train_main
+X: train lr 0.01
+X: train batch 90
+X: train epochs 30
+&layer n  
+{
+89,38
+38,20
+20,82
+82,489
+489,984
+}
+print(train_main.main(n, X))
+

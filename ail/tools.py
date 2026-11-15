@@ -5,14 +5,42 @@ def resolve_expr(expr):
     expr = merge_dotted(expr)
     out = []
     for t in expr:
+        if t.startswith("@inst") and t[5:].isdigit():
+            out.append(t)
+            continue
         v = get_value(pa.TYPE_dictionary, t)
         if v is None:
             out.append(t)
         elif isinstance(v, str):
             out.append(f'"{v}"')
+        elif isinstance(v, (list, tuple)):
+            out.extend(_list_tokens(v))
         else:
             out.append(str(v))
     return out
+
+
+def _list_tokens(items):
+    tokens = ["["]
+    for i, x in enumerate(items):
+        if i:
+            tokens.append(",")
+        tokens.extend(value_token(x))
+    tokens.append("]")
+    return tokens
+
+
+def value_token(x):
+    if isinstance(x, str):
+        return [f'"{x}"']
+    if isinstance(x, bool) or x is None:
+        return [str(x)]
+    if isinstance(x, (int, float)):
+        return [str(x)]
+    if isinstance(x, (list, tuple)):
+        return _list_tokens(x)
+    pa.INSTANCE_STORE[id(x)] = x
+    return [f"@inst{id(x)}"]
 def len_str(tokens):
     i = 0
     for i in str(tokens):
@@ -23,6 +51,20 @@ def has_symbol(stmt,symbol):
     return symbol in stmt
 #传入变量表与名
 def get_value(env, name):
+    if "." in name:
+        obj, member = name.split(".", 1)
+        if obj.startswith("@inst"):
+            inst = pa.INSTANCE_STORE.get(int(obj[5:]))
+            if inst and member in inst:
+                return inst[member]["value"]
+        if "." not in member:
+            inst = get_value(env, obj)
+            if isinstance(inst, str) and inst.startswith("@inst") and inst[5:].isdigit():
+                inst = pa.INSTANCE_STORE.get(int(inst[5:]))
+            if isinstance(inst, dict) and member in inst:
+                entry = inst[member]
+                if isinstance(entry, dict) and "value" in entry:
+                    return entry["value"]
     for local in reversed(pa.CALL_STACK):
         if name in local:
             return local[name]

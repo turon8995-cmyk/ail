@@ -6,10 +6,17 @@ from base_syntax import *
 from tools import *
 
 STATEMENT_HANDLERS = {}
+HANDLER_OWNERS = {}
 
-def register(head):
+def register(head, override=False):
     def wrapper(fn):
+        old = STATEMENT_HANDLERS.get(head)
+        if old is not None and old is not fn and not override:
+            raise RuntimeError(
+                f"语句处理器 {head!r} 已被 {old.__module__}.{old.__name__} 注册，"
+                f"不能再被 {fn.__module__}.{fn.__name__} 覆盖")
         STATEMENT_HANDLERS[head] = fn
+        HANDLER_OWNERS[head] = fn.__module__ + "." + fn.__name__
         return fn
     return wrapper
 
@@ -18,10 +25,35 @@ def execute(stmt):
     if not stmt:
         return None
     head = stmt[0]
+    if len(stmt) > 3 and any(t == "." for t in stmt) and "." not in stmt[0]:
+        from base_syntax import merge_dotted
+        merged = merge_dotted(stmt)
+        if merged != stmt:
+            stmt = merged
+            head = stmt[0]
+    if (len(stmt) >= 4 and stmt[1] == ":" and stmt[2] == "def"):
+        h = STATEMENT_HANDLERS.get("__class_def__")
+        if not h:
+            raise SyntaxError(f"未注册类函数处理器: {stmt}")
+        return h(stmt)
+
     if len(stmt) >= 2 and stmt[1] == ":":
         h = STATEMENT_HANDLERS.get("__class_member__")
         if not h:
             raise SyntaxError(f"未注册类成员处理器: {stmt}")
+        return h(stmt)
+
+    if (len(stmt) >= 5 and stmt[1] == "[" and "=" in stmt):
+        h = STATEMENT_HANDLERS.get("__index_assign__")
+        if not h:
+            raise SyntaxError(f"未注册下标赋值处理器: {stmt}")
+        return h(stmt)
+
+    if ((len(stmt) >= 3 and stmt[1] == "=" and "." in stmt[0])
+            or (len(stmt) >= 5 and stmt[1] == "." and stmt[3] == "=")):
+        h = STATEMENT_HANDLERS.get("__member_assign__")
+        if not h:
+            raise SyntaxError(f"未注册成员赋值处理器: {stmt}")
         return h(stmt)
 
     if (len(stmt) >= 3 and stmt[1] == "="
@@ -31,7 +63,7 @@ def execute(stmt):
             raise SyntaxError(f"未注册赋值处理器: {stmt}")
         return h(stmt)
     if (len(stmt) >= 3 and stmt[1] == "(" and stmt[-1] == ")" 
-            and re.fullmatch(r'[A-Za-z_]\w*', stmt[0])
+            and re.fullmatch(r'[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*', stmt[0])
             and stmt[0] not in STATEMENT_HANDLERS 
             and stmt[0] not in ("while", "if", "def", "return", "len", "print", "input")):
         from advanced_syntax import eval_expr
@@ -42,37 +74,4 @@ def execute(stmt):
         return h(stmt)
 
     raise SyntaxError(f"未知语句: {stmt}")
-def src(text):
-    tokens = tokenize(text)
-    stmts = split_statements(tokens)
-    for i, stmt in enumerate(stmts):
-        if stmt[0] == "&":
-            kind = stmt[1] if len(stmt) > 1 else None
-            if kind == "layer":
-                if i + 1 >= len(stmts) or stmts[i+1][0] != "layer":
-                    raise SyntaxError(f"&layer 后必须是 layer 块: {stmt}")
-            elif kind == "train_main":
-                if i + 1 >= len(stmts) or stmts[i+1][0] != "def":
-                    raise SyntaxError(f"&train_main 后必须是 def: {stmt}")
-            elif kind == "train_finish":
-                if i + 1 >= len(stmts):
-                    raise SyntaxError(f"&train_finish 后必须是一条语句: {stmt}")
-        execute(stmt)
-if __name__ == '__main__':
-    from nn_syntax import *
-    from advanced_syntax import *   
-    # 测试
-    src('''
-&layer xx
-layer{
-50,60
-60,30
-}
 
-&train_main
-def train() {
-    print("训练中")
-}
-
-print("完成")
-    ''')
