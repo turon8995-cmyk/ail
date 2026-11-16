@@ -1,0 +1,12 @@
+import "nn/train_mian.py" as train_mai
+import "package/np.py" as np
+X: train lr 0.01
+X: train batch 32
+X: train epochs 500
+&layer_auto n  
+{
+2,8
+8,2
+}
+print(train_mai.main(n, X))    
+np.out()
